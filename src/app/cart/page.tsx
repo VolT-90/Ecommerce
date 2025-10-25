@@ -8,114 +8,134 @@ import { Button } from "@/components/ui/button";
 import { CartContext } from "@/context/cartContext";
 import Link from "next/link";
 
+// 🔹 Types
+interface Product {
+  _id: string;
+  title: string;
+  imageCover: string;
+  price: number;
+}
+
+interface CartProduct {
+  product: Product;
+  count: number;
+}
+
+interface CartData {
+  _id: string;
+  products: CartProduct[];
+  totalCartPrice: number;
+}
+
 export default function Cart() {
-  const [cart, setCart] = useState<any>(null);
+  const [cart, setCart] = useState<CartData | null>(null);
   const [loading, setLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [clearing, setClearing] = useState(false);
 
   const context = useContext(CartContext);
   if (!context) throw new Error("CartContext not found");
+
   const { setnumberOfCartItems } = context;
 
-  // ✅ Stable getCart function (prevents useEffect warnings)
+  // 🔁 Fetch cart data
   const getCart = useCallback(async () => {
     try {
       const res = await fetch("/api/cart", { cache: "no-store" });
       const data = await res.json();
       if (data.status === "success") {
-        setCart(data.data);
+        const cartData: CartData = {
+          ...data.data,
+          totalCartPrice: Number(data.data.totalCartPrice),
+        };
+        setCart(cartData);
+        console.log(cartData)
 
-        // ✅ Update navbar count
-        const totalCount = data.data.products.reduce(
-          (acc: number, item: any) => acc + item.count,
+        // ✅ Update navbar count immediately
+        const totalCount = cartData.products.reduce(
+          (acc, item) => acc + Number(item.count),
           0
         );
         setnumberOfCartItems(totalCount);
       } else {
         setCart(null);
       }
-    } catch (error) {
-      console.error("Fetch cart error:", error);
+    } catch {
       toast.error("Failed to fetch your cart ❌");
     } finally {
       setLoading(false);
     }
   }, [setnumberOfCartItems]);
 
-  // ✅ Fetch on mount
-  useEffect(() => {
-    getCart();
-  }, [getCart]);
-
-  // ✅ Clear entire cart
-  const clearCart = useCallback(async () => {
+  // 🧹 Clear entire cart
+  async function clearCart() {
     setClearing(true);
     try {
       const res = await fetch("/api/cart/clear", { method: "DELETE" });
-      const data = await res.json();
+      let data = null;
+      try {
+        data = await res.json();
+      } catch {
+        data = { status: res.ok ? "success" : "error" };
+      }
 
       if (data.status === "success") {
         toast.success("Cart cleared successfully 🧹");
-        setCart({ products: [], totalCartPrice: 0 });
+        setCart({ products: [], totalCartPrice: 0, _id: "" });
         setnumberOfCartItems(0);
       } else {
-        toast.error(data.message || "Failed to clear cart ❌");
+        toast.error("Failed to clear cart ❌");
       }
-    } catch (error) {
-      console.error("Clear cart error:", error);
+    } catch {
       toast.error("Server error while clearing ❌");
     } finally {
       setClearing(false);
     }
-  }, [setnumberOfCartItems]);
+  }
 
-  // ✅ Remove item
-  const removeItem = useCallback(
-    async (id: string) => {
-      setUpdatingId(id);
-      try {
-        const res = await fetch(`/api/cart/remove/${id}`, { method: "DELETE" });
-        const data = await res.json();
-        if (data.status === "success") {
-          toast.success("Item removed 🗑️");
-          await getCart();
-        } else toast.error("Error removing item ❌");
-      } catch (error) {
-        toast.error("Server error while deleting ❌");
-      } finally {
-        setUpdatingId(null);
-      }
-    },
-    [getCart]
-  );
+  // 🗑 Remove product
+  async function removeItem(id: string) {
+    setUpdatingId(id);
+    try {
+      const res = await fetch(`/api/cart/remove/${id}`, { method: "DELETE" });
+      const data = await res.json();
+      if (data.status === "success") {
+        toast.success("Item removed 🗑️");
+        await getCart();
+      } else toast.error("Error removing item ❌");
+    } catch {
+      toast.error("Server error while deleting ❌");
+    } finally {
+      setUpdatingId(null);
+    }
+  }
 
-  // ✅ Update quantity
-  const updateQuantity = useCallback(
-    async (id: string, count: number) => {
-      if (count < 1) return toast.error("Quantity must be at least 1");
-      setUpdatingId(id);
-      try {
-        const res = await fetch(`/api/cart/update/${id}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ count }),
-        });
-        const data = await res.json();
-        if (data.status === "success") {
-          toast.success("Quantity updated ✅");
-          await getCart();
-        } else toast.error("Failed to update quantity ❌");
-      } catch (error) {
-        toast.error("Server error while updating ❌");
-      } finally {
-        setUpdatingId(null);
-      }
-    },
-    [getCart]
-  );
+  // 🔄 Update quantity
+  async function updateQuantity(id: string, count: number) {
+    if (count < 1) return toast.error("Quantity must be at least 1");
+    setUpdatingId(id);
+    try {
+      const res = await fetch(`/api/cart/update/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ count }),
+      });
+      const data = await res.json();
+      if (data.status === "success") {
+        toast.success("Quantity updated ✅");
+        await getCart();
+      } else toast.error("Failed to update quantity ❌");
+    } catch {
+      toast.error("Server error while updating ❌");
+    } finally {
+      setUpdatingId(null);
+    }
+  }
 
-  // ✅ Render logic
+  useEffect(() => {
+    getCart();
+  }, [getCart]);
+
   if (loading) {
     return (
       <div className="h-screen flex justify-center items-center">
@@ -146,7 +166,7 @@ export default function Cart() {
 
       <div className="relative overflow-x-auto shadow-md sm:rounded-lg">
         <h1 className="text-3xl text-emerald-500 my-4 text-center font-bold">
-          Total Cart Price: {cart.totalCartPrice} EGP
+          Total Cart Price: {Number(cart.totalCartPrice)} EGP
         </h1>
 
         <table className="hidden md:table w-full text-sm text-left text-gray-500 dark:text-gray-400">
@@ -160,40 +180,43 @@ export default function Cart() {
             </tr>
           </thead>
           <tbody>
-            {cart.products.map((product: any) => (
-              <tr key={product._id} className="bg-white border-b hover:bg-gray-50">
+            {cart.products.map((item) => (
+              <tr
+                key={item.product._id}
+                className="bg-white border-b hover:bg-gray-50"
+              >
                 <td className="p-3">
                   <Image
                     width={300}
                     height={300}
-                    src={product.product.imageCover}
-                    alt={product.product.title}
+                    src={item.product.imageCover}
+                    alt={item.product.title}
                     className="w-16 md:w-24 rounded-md object-cover"
                   />
                 </td>
                 <td className="px-4 py-3 font-semibold text-green-500">
-                  {product.product.title}
+                  {item.product.title}
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-2">
                     <button
-                      disabled={updatingId === product.product.id}
+                      disabled={updatingId === item.product._id}
                       onClick={() =>
-                        updateQuantity(product.product.id, product.count - 1)
+                        updateQuantity(item.product._id, item.count - 1)
                       }
                       className="inline-flex items-center justify-center p-1 h-6 w-6 text-gray-600 bg-gray-100 rounded-full hover:bg-gray-200 disabled:bg-slate-200"
                     >
                       −
                     </button>
-                    {updatingId === product.product.id ? (
+                    {updatingId === item.product._id ? (
                       <i className="fa-solid fa-circle-notch fa-spin text-[#1ed540]"></i>
                     ) : (
-                      <span>{product.count}</span>
+                      <span>{item.count}</span>
                     )}
                     <button
-                      disabled={updatingId === product.product.id}
+                      disabled={updatingId === item.product._id}
                       onClick={() =>
-                        updateQuantity(product.product.id, product.count + 1)
+                        updateQuantity(item.product._id, item.count + 1)
                       }
                       className="inline-flex items-center justify-center p-1 h-6 w-6 text-gray-600 bg-gray-100 rounded-full hover:bg-gray-200 disabled:bg-slate-200"
                     >
@@ -202,12 +225,13 @@ export default function Cart() {
                   </div>
                 </td>
                 <td className="px-4 py-3 font-semibold text-gray-900">
-                  {product.price * product.count} EGP
+                  {(Number(cart.products) * Number(item.count))}
+                  EGP
                 </td>
                 <td className="px-4 py-3 text-center">
                   <button
-                    disabled={updatingId === product.product.id}
-                    onClick={() => removeItem(product.product.id)}
+                    disabled={updatingId === item.product._id}
+                    onClick={() => removeItem(item.product._id)}
                     className="font-medium text-red-600 hover:underline cursor-pointer disabled:text-slate-500"
                   >
                     Remove
