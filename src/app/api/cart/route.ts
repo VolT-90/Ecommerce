@@ -1,29 +1,12 @@
-import { NextResponse } from "next/server";
-import getMyToken from "@/utilities/getMyToken";
+import getLoggedUserCart from "@/CartActions/getLoggedCart";
+import { NextRequest, NextResponse } from "next/server";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const token = await getMyToken();
-    if (!token) {
-      return NextResponse.json(
-        { status: "error", message: "No token found. Please login." },
-        { status: 401 }
-      );
-    }
-
-    const res = await fetch("https://ecommerce.routemisr.com/api/v1/cart", {
-      method: "GET",
-      headers: {
-        token,
-        "Content-Type": "application/json",
-      },
-      cache: "no-store",
-    });
-
-    const data = await res.json();
+    const data = await getLoggedUserCart();
     return NextResponse.json(data);
   } catch (error) {
-    console.error("Cart fetch error:", error);
+    console.error("Get cart error:", error);
     return NextResponse.json(
       { status: "error", message: "Failed to fetch cart" },
       { status: 500 }

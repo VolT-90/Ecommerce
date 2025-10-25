@@ -1,19 +1,21 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import updateCartQuantity from "@/CartActions/updateCartQuantity.actions";
 
 export async function PUT(
-  request: Request,
-  { params }: { params: { id: string } }
+  request: NextRequest,
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await context.params; // ✅ await params
     const body = await request.json();
-    const { count } = body;
-    const data = await updateCartQuantity(params.id, count);
+
+    const data = await updateCartQuantity(id, body.quantity);
+
     return NextResponse.json(data);
   } catch (error) {
-    console.error("Update quantity error:", error);
+    console.error("Update cart item error:", error);
     return NextResponse.json(
-      { status: "error", message: "Failed to update quantity" },
+      { status: "error", message: "Failed to update item" },
       { status: 500 }
     );
   }

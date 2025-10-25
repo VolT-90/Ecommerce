@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useContext } from "react";
+import React, { useEffect, useState, useContext, useCallback } from "react";
 import Image from "next/image";
 import { toast } from "sonner";
 import { ClipLoader } from "react-spinners";
@@ -16,17 +16,17 @@ export default function Cart() {
 
   const context = useContext(CartContext);
   if (!context) throw new Error("CartContext not found");
-
   const { setnumberOfCartItems } = context;
 
-  // 🔁 Fetch cart data
-  async function getCart() {
+  // ✅ Stable getCart function (prevents useEffect warnings)
+  const getCart = useCallback(async () => {
     try {
       const res = await fetch("/api/cart", { cache: "no-store" });
       const data = await res.json();
       if (data.status === "success") {
         setCart(data.data);
-        // ✅ update navbar count immediately
+
+        // ✅ Update navbar count
         const totalCount = data.data.products.reduce(
           (acc: number, item: any) => acc + item.count,
           0
@@ -35,86 +35,87 @@ export default function Cart() {
       } else {
         setCart(null);
       }
-    } catch (err) {
-      console.error("Fetch cart error:", err);
+    } catch (error) {
+      console.error("Fetch cart error:", error);
       toast.error("Failed to fetch your cart ❌");
     } finally {
       setLoading(false);
     }
-  }
+  }, [setnumberOfCartItems]);
 
-  // 🧹 Clear entire cart
-  async function clearCart() {
+  // ✅ Fetch on mount
+  useEffect(() => {
+    getCart();
+  }, [getCart]);
+
+  // ✅ Clear entire cart
+  const clearCart = useCallback(async () => {
     setClearing(true);
     try {
       const res = await fetch("/api/cart/clear", { method: "DELETE" });
-
-      // Some deployments return no body, so we safely parse
-      let data = null;
-      try {
-        data = await res.json();
-      } catch {
-        data = { status: res.ok ? "success" : "error" };
-      }
+      const data = await res.json();
 
       if (data.status === "success") {
         toast.success("Cart cleared successfully 🧹");
         setCart({ products: [], totalCartPrice: 0 });
-        setnumberOfCartItems(0); // ✅ instantly update navbar
+        setnumberOfCartItems(0);
       } else {
-        toast.error("Failed to clear cart ❌");
+        toast.error(data.message || "Failed to clear cart ❌");
       }
-    } catch (err) {
-      console.error("Clear cart error:", err);
+    } catch (error) {
+      console.error("Clear cart error:", error);
       toast.error("Server error while clearing ❌");
     } finally {
       setClearing(false);
     }
-  }
+  }, [setnumberOfCartItems]);
 
-  // 🗑 Remove product
-  async function removeItem(id: string) {
-    setUpdatingId(id);
-    try {
-      const res = await fetch(`/api/cart/remove/${id}`, { method: "DELETE" });
-      const data = await res.json();
-      if (data.status === "success") {
-        toast.success("Item removed 🗑️");
-        await getCart();
-      } else toast.error("Error removing item ❌");
-    } catch {
-      toast.error("Server error while deleting ❌");
-    } finally {
-      setUpdatingId(null);
-    }
-  }
+  // ✅ Remove item
+  const removeItem = useCallback(
+    async (id: string) => {
+      setUpdatingId(id);
+      try {
+        const res = await fetch(`/api/cart/remove/${id}`, { method: "DELETE" });
+        const data = await res.json();
+        if (data.status === "success") {
+          toast.success("Item removed 🗑️");
+          await getCart();
+        } else toast.error("Error removing item ❌");
+      } catch (error) {
+        toast.error("Server error while deleting ❌");
+      } finally {
+        setUpdatingId(null);
+      }
+    },
+    [getCart]
+  );
 
-  // 🔄 Update quantity
-  async function updateQuantity(id: string, count: number) {
-    if (count < 1) return toast.error("Quantity must be at least 1");
-    setUpdatingId(id);
-    try {
-      const res = await fetch(`/api/cart/update/${id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ count }),
-      });
-      const data = await res.json();
-      if (data.status === "success") {
-        toast.success("Quantity updated ✅");
-        await getCart();
-      } else toast.error("Failed to update quantity ❌");
-    } catch {
-      toast.error("Server error while updating ❌");
-    } finally {
-      setUpdatingId(null);
-    }
-  }
+  // ✅ Update quantity
+  const updateQuantity = useCallback(
+    async (id: string, count: number) => {
+      if (count < 1) return toast.error("Quantity must be at least 1");
+      setUpdatingId(id);
+      try {
+        const res = await fetch(`/api/cart/update/${id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ count }),
+        });
+        const data = await res.json();
+        if (data.status === "success") {
+          toast.success("Quantity updated ✅");
+          await getCart();
+        } else toast.error("Failed to update quantity ❌");
+      } catch (error) {
+        toast.error("Server error while updating ❌");
+      } finally {
+        setUpdatingId(null);
+      }
+    },
+    [getCart]
+  );
 
-  useEffect(() => {
-    getCart();
-  }, []);
-
+  // ✅ Render logic
   if (loading) {
     return (
       <div className="h-screen flex justify-center items-center">
@@ -148,7 +149,6 @@ export default function Cart() {
           Total Cart Price: {cart.totalCartPrice} EGP
         </h1>
 
-        {/* 🧾 Desktop Table */}
         <table className="hidden md:table w-full text-sm text-left text-gray-500 dark:text-gray-400">
           <thead className="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
             <tr>

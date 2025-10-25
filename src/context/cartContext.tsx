@@ -2,7 +2,6 @@
 
 import React, { createContext, useEffect, useState, ReactNode } from 'react'
 import getLoggedUserCart from '@/CartActions/getLoggedCart'
-import { ProductType } from '@/types/Product.type'
 import { CartProductType } from '@/types/Cart.type'
 
 // 1️⃣ Define the context type
@@ -34,7 +33,7 @@ export default function CartContextProvider({ children }: CartContextProviderPro
         setnumberOfCartItems(sum)
       }
     } catch (err : unknown) {
-      console.log('Must Login')
+      console.log('Must Login',err)
     }
   }
 

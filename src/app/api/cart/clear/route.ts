@@ -1,12 +1,18 @@
-import { NextResponse } from "next/server";
 import clearCartUser from "@/CartActions/clearCartUser.actions";
+import { NextResponse, NextRequest } from "next/server";
 
-export async function DELETE() {
+
+export async function DELETE(request: NextRequest) {
   try {
-    const data = await clearCartUser();
-    return NextResponse.json(data);
+    const result = await clearCartUser();
+
+    return NextResponse.json({
+      status: "success",
+      message: "Cart cleared successfully",
+      data: result,
+    });
   } catch (error) {
-    console.error("Clear cart error:", error);
+    console.error("❌ Error clearing cart:", error);
     return NextResponse.json(
       { status: "error", message: "Failed to clear cart" },
       { status: 500 }
